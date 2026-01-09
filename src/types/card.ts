@@ -67,18 +67,18 @@ export const UNIT_COLORS: Record<EUnitType, string> = {
 };
 
 export const UNIT_KOREAN_NAMES: Record<EUnitType, string> = {
-  Marine: '마린',
-  Turret: '터렛',
-  Archon: '제우스',
-  DrFrost: '눈사람',
-  Marauder: '고릴라',
-  Templer: '사도',
-  Dragoon: '거북이',
-  Vessel: '지우개',
-  Carrier: '우주모함',
-  Ninja: '어썌신',
-  Thor: '토르',
-  AirMan: '바람돌이',
+  Marine: '영웅',      // unit_name_0
+  Turret: '터렛',      // unit_name_1
+  Archon: '제우스',    // unit_name_2
+  DrFrost: '눈사람',   // unit_name_3
+  Marauder: '고릴라',  // unit_name_4
+  Templer: '사도',     // unit_name_5
+  Dragoon: '거북이',   // unit_name_6
+  Vessel: '지우개',    // unit_name_7
+  Carrier: '우주모함', // unit_name_8
+  Ninja: '어쌔신',     // unit_name_9
+  Thor: '또르',        // unit_name_10
+  AirMan: '바람돌이',  // unit_name_11
 };
 
 export const CARD_TYPE_COLORS: Record<ECardType, string> = {
