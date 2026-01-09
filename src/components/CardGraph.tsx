@@ -362,20 +362,23 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
       </ReactFlow>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 p-3 bg-gray-800/90 rounded-lg text-xs">
-        <h4 className="font-bold text-white mb-2">범례</h4>
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-0.5" style={{ backgroundColor: CARD_TYPE_COLORS.Chain }}></div>
-            <span className="text-gray-300">연계 (A → B 획득 순서)</span>
+      <div className="absolute bottom-4 left-4 max-w-[200px] z-10">
+        <div className="bg-gray-800/90 rounded-lg overflow-hidden border border-gray-700">
+          <div className="p-2 md:p-3 text-xs">
+            <h4 className="font-bold text-white mb-2 flex items-center justify-between pointer-events-none md:pointer-events-auto">
+              <span>범례</span>
+            </h4>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <div className="w-6 md:w-8 h-0.5" style={{ backgroundColor: CARD_TYPE_COLORS.Chain }}></div>
+                <span className="text-gray-300 text-[10px] md:text-xs">연계 (획득 순서)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 md:w-8 h-0.5 border-t-2 border-dashed" style={{ borderColor: CARD_TYPE_COLORS.Combo }}></div>
+                <span className="text-gray-300 text-[10px] md:text-xs">조합 (랭크 조건)</span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-0.5 border-t-2 border-dashed" style={{ borderColor: CARD_TYPE_COLORS.Combo }}></div>
-            <span className="text-gray-300">조합 (유닛 랭크 조건)</span>
-          </div>
-        </div>
-        <div className="mt-2 pt-2 border-t border-gray-700 text-gray-400">
-          카드 클릭 시 연관 관계 하이라이트
         </div>
       </div>
     </div>

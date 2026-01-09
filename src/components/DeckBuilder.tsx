@@ -423,6 +423,8 @@ export default function DeckBuilder() {
     }
   };
 
+  const [mobileTab, setMobileTab] = useState<'config' | 'cards' | 'deck'>('cards');
+
   // Calculate total cards in deck
   const totalCards = deck.reduce((sum, d) => sum + d.count, 0);
 
@@ -435,11 +437,45 @@ export default function DeckBuilder() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col md:flex-row h-full relative">
+      {/* Mobile Navigation */}
+      <div className="md:hidden shrink-0 flex items-stretch bg-gray-800 border-b border-gray-700 h-10">
+        <button
+          onClick={() => setMobileTab('config')}
+          className={`flex-1 text-xs font-medium border-b-2 transition-colors ${
+            mobileTab === 'config'
+              ? 'border-blue-500 text-white bg-gray-700/50'
+              : 'border-transparent text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          유닛 설정
+        </button>
+        <button
+          onClick={() => setMobileTab('cards')}
+          className={`flex-1 text-xs font-medium border-b-2 transition-colors ${
+            mobileTab === 'cards'
+              ? 'border-blue-500 text-white bg-gray-700/50'
+              : 'border-transparent text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          카드 목록
+        </button>
+        <button
+          onClick={() => setMobileTab('deck')}
+          className={`flex-1 text-xs font-medium border-b-2 transition-colors ${
+            mobileTab === 'deck'
+              ? 'border-blue-500 text-white bg-gray-700/50'
+              : 'border-transparent text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          내 덱 <span className="text-blue-400">({totalCards})</span>
+        </button>
+      </div>
+
       {/* Save Modal */}
       {showSaveModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-80 border border-gray-700">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700 shadow-xl">
             <h3 className="text-lg font-bold text-white mb-4">클라우드에 저장</h3>
             <div className="space-y-3">
               <div>
@@ -491,8 +527,8 @@ export default function DeckBuilder() {
 
       {/* Load Modal */}
       {showLoadModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-80 border border-gray-700">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-sm border border-gray-700 shadow-xl">
             <h3 className="text-lg font-bold text-white mb-4">클라우드에서 불러오기</h3>
             <div className="space-y-3">
               <div>
@@ -543,7 +579,7 @@ export default function DeckBuilder() {
       )}
 
       {/* Left Panel - Unit Configuration */}
-      <div className="w-64 bg-gray-800 border-r border-gray-700 overflow-y-auto">
+      <div className={`${mobileTab === 'config' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-64 bg-gray-800 border-r border-gray-700 overflow-y-auto shrink-0 h-full`}>
         <div className="p-4">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold text-white">유닛 설정</h2>
@@ -655,9 +691,9 @@ export default function DeckBuilder() {
       </div>
 
       {/* Middle Panel - Card List */}
-      <div className="flex-1 overflow-hidden flex flex-col bg-gray-900">
+      <div className={`${mobileTab === 'cards' ? 'flex' : 'hidden'} md:flex flex-1 overflow-hidden flex-col bg-gray-900 h-full`}>
         {/* Filters */}
-        <div className="p-4 border-b border-gray-700 space-y-3">
+        <div className="p-4 border-b border-gray-700 space-y-3 shrink-0">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-white">
               카드 목록
@@ -727,10 +763,10 @@ export default function DeckBuilder() {
         </div>
 
         {/* Card grid */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 min-h-0">
           {enabledUnits.length === 0 ? (
             <div className="text-center text-gray-500 py-12">
-              왼쪽에서 유닛을 활성화해주세요
+              왼쪽(설정)에서 유닛을 활성화해주세요
             </div>
           ) : filteredCards.length === 0 ? (
             <div className="text-center text-gray-500 py-12">
@@ -809,8 +845,8 @@ export default function DeckBuilder() {
       </div>
 
       {/* Right Panel - Deck */}
-      <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
-        <div className="p-4 border-b border-gray-700">
+      <div className={`${mobileTab === 'deck' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-80 bg-gray-800 border-l border-gray-700 shrink-0 h-full`}>
+        <div className="p-4 border-b border-gray-700 shrink-0">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold text-white">내 덱</h2>
             <span className="text-sm text-gray-400">{totalCards}장</span>
@@ -823,7 +859,7 @@ export default function DeckBuilder() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 min-h-0">
           {deck.length === 0 ? (
             <div className="text-center text-gray-500 py-8">
               카드를 클릭하여 덱에 추가하세요
@@ -874,7 +910,7 @@ export default function DeckBuilder() {
 
         {/* Deck Summary */}
         {deck.length > 0 && (
-          <div className="p-4 border-t border-gray-700 bg-gray-800/50">
+          <div className="p-4 border-t border-gray-700 bg-gray-800/50 shrink-0">
             <h3 className="text-sm font-medium text-white mb-2">덱 구성</h3>
             <div className="space-y-1 text-xs">
               {(['Common', 'Chain', 'Promotion', 'Combo'] as ECardType[]).map(type => {

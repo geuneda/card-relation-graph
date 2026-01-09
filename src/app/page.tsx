@@ -50,11 +50,12 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-gray-900">
       {/* Header */}
-      <header className="px-6 py-4 bg-gray-800 border-b border-gray-700">
-        <h1 className="text-2xl font-bold text-white">
-          벙커디펜스 카드 관계도 & 덱 빌더
+      <header className="px-4 py-3 md:px-6 md:py-4 bg-gray-800 border-b border-gray-700 shrink-0">
+        <h1 className="text-lg md:text-2xl font-bold text-white flex items-center justify-between">
+          <span>벙커디펜스 카드 관계도</span>
+          <span className="text-xs md:text-sm font-normal text-gray-400 md:hidden">v0.1.0</span>
         </h1>
-        <p className="text-sm text-gray-400 mt-1">
+        <p className="text-xs md:text-sm text-gray-400 mt-1 hidden md:block">
           {activeTab === 'graph'
             ? '여러 유닛을 선택하여 조합카드 관계를 확인하세요'
             : '유닛의 랭크를 설정하고 조건에 맞는 카드로 덱을 구성하세요'}
@@ -62,59 +63,67 @@ export default function Home() {
       </header>
 
       {/* Tab Navigation */}
-      <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      <div className="shrink-0">
+        <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      </div>
 
       {/* Content */}
-      {activeTab === 'graph' ? (
-        <>
-          {/* Unit Selector for Graph */}
-          <UnitSelector
-            selectedUnits={selectedUnits}
-            onToggleUnit={handleToggleUnit}
-            onSelectAll={handleSelectAll}
-            onClearAll={handleClearAll}
-          />
+      <div className="flex-1 overflow-hidden flex flex-col relative">
+        {activeTab === 'graph' ? (
+          <>
+            {/* Unit Selector for Graph */}
+            <div className="shrink-0 z-10 relative">
+              <UnitSelector
+                selectedUnits={selectedUnits}
+                onToggleUnit={handleToggleUnit}
+                onSelectAll={handleSelectAll}
+                onClearAll={handleClearAll}
+              />
+            </div>
 
-          {/* Current Selection Info */}
-          <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 flex flex-wrap items-center gap-2">
-            <span className="text-gray-400 text-sm">선택된 유닛:</span>
-            {selectedUnits.length === 0 ? (
-              <span className="text-gray-500 text-sm">없음</span>
-            ) : (
-              selectedUnits.map(unit => (
-                <span
-                  key={unit}
-                  className="px-2 py-0.5 text-xs rounded-full text-white bg-gray-700"
-                >
-                  {UNIT_KOREAN_NAMES[unit]}
+            {/* Current Selection Info - Desktop Only */}
+            <div className="hidden md:flex px-4 py-2 bg-gray-800/50 border-b border-gray-700 flex-wrap items-center gap-2 shrink-0">
+              <span className="text-gray-400 text-sm">선택된 유닛:</span>
+              {selectedUnits.length === 0 ? (
+                <span className="text-gray-500 text-sm">없음</span>
+              ) : (
+                selectedUnits.map(unit => (
+                  <span
+                    key={unit}
+                    className="px-2 py-0.5 text-xs rounded-full text-white bg-gray-700"
+                  >
+                    {UNIT_KOREAN_NAMES[unit]}
+                  </span>
+                ))
+              )}
+              {selectedUnits.length > 1 && (
+                <span className="text-gray-500 text-xs ml-2">
+                  (점선: 유닛 간 조합카드 관계)
                 </span>
-              ))
-            )}
-            {selectedUnits.length > 1 && (
-              <span className="text-gray-500 text-xs ml-2">
-                (점선: 유닛 간 조합카드 관계)
-              </span>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* Graph */}
-          <div className="flex-1 relative">
-            <CardGraph selectedUnits={selectedUnits} />
-          </div>
+            {/* Graph */}
+            <div className="flex-1 relative min-h-0">
+              <CardGraph selectedUnits={selectedUnits} />
+            </div>
 
-          {/* Footer */}
-          <footer className="px-4 py-2 bg-gray-800 border-t border-gray-700 text-center">
-            <p className="text-xs text-gray-500">
-              <span className="text-blue-400">━</span> 연계: A → B → C (A가 있어야 B 획득 가능) |
-              <span className="text-red-400 ml-2">┅</span> 조합: 해당 유닛이 특정 랭크 이상이어야 함
-            </p>
-          </footer>
-        </>
-      ) : (
-        <div className="flex-1 overflow-hidden">
-          <DeckBuilder />
-        </div>
-      )}
+            {/* Footer */}
+            <footer className="px-4 py-2 bg-gray-800 border-t border-gray-700 text-center shrink-0 text-[10px] md:text-xs text-gray-500">
+              <p>
+                <span className="text-blue-400">━</span> 연계: A → B → C (A가 있어야 B 획득 가능) 
+                <span className="hidden md:inline"> | </span>
+                <span className="md:hidden"><br/></span>
+                <span className="text-red-400 ml-2">┅</span> 조합: 해당 유닛이 특정 랭크 이상이어야 함
+              </p>
+            </footer>
+          </>
+        ) : (
+          <div className="flex-1 w-full h-full">
+            <DeckBuilder />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
