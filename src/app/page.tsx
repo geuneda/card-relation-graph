@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import UnitSelector from '@/components/UnitSelector';
 import { EUnitType, UNIT_KOREAN_NAMES } from '@/types/card';
+import { getAllUnits } from '@/data/cards';
 
 const CardGraph = dynamic(() => import('@/components/CardGraph'), {
   ssr: false,
@@ -15,7 +16,25 @@ const CardGraph = dynamic(() => import('@/components/CardGraph'), {
 });
 
 export default function Home() {
-  const [selectedUnit, setSelectedUnit] = useState<EUnitType>('Marine');
+  const [selectedUnits, setSelectedUnits] = useState<EUnitType[]>(['Marine']);
+
+  const handleToggleUnit = useCallback((unit: EUnitType) => {
+    setSelectedUnits(prev => {
+      if (prev.includes(unit)) {
+        return prev.filter(u => u !== unit);
+      } else {
+        return [...prev, unit];
+      }
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedUnits(getAllUnits());
+  }, []);
+
+  const handleClearAll = useCallback(() => {
+    setSelectedUnits([]);
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
@@ -25,29 +44,51 @@ export default function Home() {
           MarinRPG 카드 관계도
         </h1>
         <p className="text-sm text-gray-400 mt-1">
-          유닛을 선택하고 카드를 클릭하면 연계 관계를 확인할 수 있습니다
+          여러 유닛을 선택하여 조합카드 관계를 확인하세요. 카드를 클릭하면 연관 관계가 하이라이트됩니다.
         </p>
       </header>
 
       {/* Unit Selector */}
-      <UnitSelector selectedUnit={selectedUnit} onSelectUnit={setSelectedUnit} />
+      <UnitSelector
+        selectedUnits={selectedUnits}
+        onToggleUnit={handleToggleUnit}
+        onSelectAll={handleSelectAll}
+        onClearAll={handleClearAll}
+      />
 
-      {/* Current Unit Info */}
-      <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700">
-        <span className="text-gray-400 text-sm">
-          현재 선택: <span className="text-white font-medium">{UNIT_KOREAN_NAMES[selectedUnit]}</span>
-        </span>
+      {/* Current Selection Info */}
+      <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 flex flex-wrap items-center gap-2">
+        <span className="text-gray-400 text-sm">선택된 유닛:</span>
+        {selectedUnits.length === 0 ? (
+          <span className="text-gray-500 text-sm">없음</span>
+        ) : (
+          selectedUnits.map(unit => (
+            <span
+              key={unit}
+              className="px-2 py-0.5 text-xs rounded-full text-white"
+              style={{ backgroundColor: `${UNIT_KOREAN_NAMES[unit] ? '#374151' : '#374151'}` }}
+            >
+              {UNIT_KOREAN_NAMES[unit]}
+            </span>
+          ))
+        )}
+        {selectedUnits.length > 1 && (
+          <span className="text-gray-500 text-xs ml-2">
+            (점선: 유닛 간 조합카드 관계)
+          </span>
+        )}
       </div>
 
       {/* Graph */}
       <div className="flex-1 relative">
-        <CardGraph selectedUnit={selectedUnit} />
+        <CardGraph selectedUnits={selectedUnits} />
       </div>
 
       {/* Footer */}
       <footer className="px-4 py-2 bg-gray-800 border-t border-gray-700 text-center">
         <p className="text-xs text-gray-500">
-          연계카드: A → B → C (A가 있어야 B 획득 가능) | 조합카드: 해당 유닛이 특정 랭크 이상이어야 함
+          <span className="text-blue-400">━</span> 연계: A → B → C (A가 있어야 B 획득 가능) |
+          <span className="text-red-400 ml-2">┅</span> 조합: 해당 유닛이 특정 랭크 이상이어야 함
         </p>
       </footer>
     </div>
