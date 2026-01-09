@@ -62,6 +62,14 @@ export default function DeckBuilder() {
   const [sortBy, setSortBy] = useState<'unit' | 'rank' | 'type' | 'name'>('unit');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
 
+  // Cloud save/load states
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
+  const [slotName, setSlotName] = useState('');
+  const [password, setPassword] = useState('');
+  const [cloudLoading, setCloudLoading] = useState(false);
+  const [cloudMessage, setCloudMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Load saved state from localStorage
   useEffect(() => {
     try {
@@ -321,6 +329,100 @@ export default function DeckBuilder() {
     localStorage.removeItem(STORAGE_KEY);
   };
 
+  // Cloud save
+  const handleCloudSave = async () => {
+    if (!slotName || !password) {
+      setCloudMessage({ type: 'error', text: '슬롯 이름과 비밀번호를 입력하세요.' });
+      return;
+    }
+
+    setCloudLoading(true);
+    setCloudMessage(null);
+
+    try {
+      const response = await fetch('/api/deck/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slotName,
+          password,
+          data: {
+            unitConfigs,
+            deck: deck.map(d => ({ cardID: d.card.cardID, count: d.count })),
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setCloudMessage({ type: 'success', text: result.message });
+        setTimeout(() => {
+          setShowSaveModal(false);
+          setCloudMessage(null);
+        }, 1500);
+      } else {
+        setCloudMessage({ type: 'error', text: result.error });
+      }
+    } catch (error) {
+      setCloudMessage({ type: 'error', text: '저장 중 오류가 발생했습니다.' });
+    } finally {
+      setCloudLoading(false);
+    }
+  };
+
+  // Cloud load
+  const handleCloudLoad = async () => {
+    if (!slotName || !password) {
+      setCloudMessage({ type: 'error', text: '슬롯 이름과 비밀번호를 입력하세요.' });
+      return;
+    }
+
+    setCloudLoading(true);
+    setCloudMessage(null);
+
+    try {
+      const response = await fetch('/api/deck/load', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotName, password }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // Restore unit configs
+        if (result.data.unitConfigs) {
+          setUnitConfigs(result.data.unitConfigs);
+        }
+
+        // Restore deck
+        if (result.data.deck) {
+          const restoredDeck: DeckCard[] = [];
+          result.data.deck.forEach((saved: SavedDeckCard) => {
+            const card = getCardById(saved.cardID);
+            if (card) {
+              restoredDeck.push({ card, count: saved.count });
+            }
+          });
+          setDeck(restoredDeck);
+        }
+
+        setCloudMessage({ type: 'success', text: '덱을 불러왔습니다!' });
+        setTimeout(() => {
+          setShowLoadModal(false);
+          setCloudMessage(null);
+        }, 1500);
+      } else {
+        setCloudMessage({ type: 'error', text: result.error });
+      }
+    } catch (error) {
+      setCloudMessage({ type: 'error', text: '불러오기 중 오류가 발생했습니다.' });
+    } finally {
+      setCloudLoading(false);
+    }
+  };
+
   // Calculate total cards in deck
   const totalCards = deck.reduce((sum, d) => sum + d.count, 0);
 
@@ -334,6 +436,112 @@ export default function DeckBuilder() {
 
   return (
     <div className="flex h-full">
+      {/* Save Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-80 border border-gray-700">
+            <h3 className="text-lg font-bold text-white mb-4">클라우드에 저장</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">슬롯 이름</label>
+                <input
+                  type="text"
+                  value={slotName}
+                  onChange={e => setSlotName(e.target.value)}
+                  placeholder="예: 내덱1"
+                  className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                  maxLength={20}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">비밀번호</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="4자 이상"
+                  className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              {cloudMessage && (
+                <p className={`text-sm ${cloudMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                  {cloudMessage.text}
+                </p>
+              )}
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => { setShowSaveModal(false); setCloudMessage(null); }}
+                  className="flex-1 px-3 py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                  disabled={cloudLoading}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleCloudSave}
+                  className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  disabled={cloudLoading}
+                >
+                  {cloudLoading ? '저장 중...' : '저장'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Load Modal */}
+      {showLoadModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-80 border border-gray-700">
+            <h3 className="text-lg font-bold text-white mb-4">클라우드에서 불러오기</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">슬롯 이름</label>
+                <input
+                  type="text"
+                  value={slotName}
+                  onChange={e => setSlotName(e.target.value)}
+                  placeholder="예: 내덱1"
+                  className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                  maxLength={20}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">비밀번호</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="저장 시 설정한 비밀번호"
+                  className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              {cloudMessage && (
+                <p className={`text-sm ${cloudMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                  {cloudMessage.text}
+                </p>
+              )}
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => { setShowLoadModal(false); setCloudMessage(null); }}
+                  className="flex-1 px-3 py-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                  disabled={cloudLoading}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleCloudLoad}
+                  className="flex-1 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                  disabled={cloudLoading}
+                >
+                  {cloudLoading ? '불러오는 중...' : '불러오기'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Left Panel - Unit Configuration */}
       <div className="w-64 bg-gray-800 border-r border-gray-700 overflow-y-auto">
         <div className="p-4">
@@ -351,11 +559,27 @@ export default function DeckBuilder() {
             설정은 자동 저장됩니다
           </p>
 
+          {/* Cloud save/load buttons */}
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => { setShowSaveModal(true); setCloudMessage(null); }}
+              className="flex-1 px-2 py-1.5 text-xs bg-blue-900/50 text-blue-300 rounded hover:bg-blue-900/70 flex items-center justify-center gap-1"
+            >
+              <span>☁️</span> 저장
+            </button>
+            <button
+              onClick={() => { setShowLoadModal(true); setCloudMessage(null); }}
+              className="flex-1 px-2 py-1.5 text-xs bg-green-900/50 text-green-300 rounded hover:bg-green-900/70 flex items-center justify-center gap-1"
+            >
+              <span>☁️</span> 불러오기
+            </button>
+          </div>
+
           {/* Quick actions */}
           <div className="flex gap-2 mb-3">
             <button
               onClick={enableAllUnits}
-              className="flex-1 px-2 py-1 text-xs bg-blue-900/50 text-blue-300 rounded hover:bg-blue-900/70"
+              className="flex-1 px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
             >
               전체 선택
             </button>
