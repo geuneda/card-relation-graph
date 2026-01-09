@@ -52,7 +52,7 @@ export default function Home() {
       {/* Header */}
       <header className="px-6 py-4 bg-gray-800 border-b border-gray-700">
         <h1 className="text-2xl font-bold text-white">
-          MarinRPG 카드 관계도 & 덱 빌더
+          벙커디펜스 카드 관계도 & 덱 빌더
         </h1>
         <p className="text-sm text-gray-400 mt-1">
           {activeTab === 'graph'
