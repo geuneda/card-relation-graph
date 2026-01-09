@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   CardData,
   EUnitType,
@@ -24,7 +24,25 @@ interface DeckCard {
   count: number;
 }
 
+interface SavedDeckCard {
+  cardID: number;
+  count: number;
+}
+
+interface SavedState {
+  unitConfigs: UnitConfig[];
+  deck: SavedDeckCard[];
+  typeFilter: ECardType | 'all';
+  unitFilter: EUnitType | 'all';
+  searchQuery: string;
+  sortBy: 'unit' | 'rank' | 'type' | 'name';
+}
+
+const STORAGE_KEY = 'marinrpg-deckbuilder-state';
+
 export default function DeckBuilder() {
+  const [isLoaded, setIsLoaded] = useState(false);
+
   // Unit configurations with ranks
   const [unitConfigs, setUnitConfigs] = useState<UnitConfig[]>(
     getAllUnits().map(unit => ({
@@ -37,8 +55,67 @@ export default function DeckBuilder() {
   // Selected deck cards
   const [deck, setDeck] = useState<DeckCard[]>([]);
 
-  // Filter state
+  // Filter states
   const [typeFilter, setTypeFilter] = useState<ECardType | 'all'>('all');
+  const [unitFilter, setUnitFilter] = useState<EUnitType | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'unit' | 'rank' | 'type' | 'name'>('unit');
+  const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
+
+  // Load saved state from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const state: SavedState = JSON.parse(saved);
+
+        // Restore unit configs
+        if (state.unitConfigs) {
+          setUnitConfigs(state.unitConfigs);
+        }
+
+        // Restore deck (need to reconstruct CardData from cardID)
+        if (state.deck) {
+          const restoredDeck: DeckCard[] = [];
+          state.deck.forEach(saved => {
+            const card = getCardById(saved.cardID);
+            if (card) {
+              restoredDeck.push({ card, count: saved.count });
+            }
+          });
+          setDeck(restoredDeck);
+        }
+
+        // Restore filters
+        if (state.typeFilter) setTypeFilter(state.typeFilter);
+        if (state.unitFilter) setUnitFilter(state.unitFilter);
+        if (state.searchQuery) setSearchQuery(state.searchQuery);
+        if (state.sortBy) setSortBy(state.sortBy);
+      }
+    } catch (e) {
+      console.error('Failed to load saved state:', e);
+    }
+    setIsLoaded(true);
+  }, []);
+
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    try {
+      const state: SavedState = {
+        unitConfigs,
+        deck: deck.map(d => ({ cardID: d.card.cardID, count: d.count })),
+        typeFilter,
+        unitFilter,
+        searchQuery,
+        sortBy,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.error('Failed to save state:', e);
+    }
+  }, [isLoaded, unitConfigs, deck, typeFilter, unitFilter, searchQuery, sortBy]);
 
   // Get enabled units
   const enabledUnits = useMemo(
@@ -114,9 +191,9 @@ export default function DeckBuilder() {
     [unitConfigs, deck]
   );
 
-  // Get available cards for each enabled unit
-  const availableCards = useMemo(() => {
-    const cards: CardData[] = [];
+  // Get available cards for each enabled unit with filters
+  const filteredCards = useMemo(() => {
+    let cards: CardData[] = [];
     enabledUnits.forEach(config => {
       const unitCards = getCardsByUnit(config.unit);
       // Filter out Spawn cards and cards above current rank
@@ -128,11 +205,48 @@ export default function DeckBuilder() {
 
     // Apply type filter
     if (typeFilter !== 'all') {
-      return cards.filter(card => card.cardType === typeFilter);
+      cards = cards.filter(card => card.cardType === typeFilter);
     }
 
+    // Apply unit filter
+    if (unitFilter !== 'all') {
+      cards = cards.filter(card => card.targetUnit === unitFilter);
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      cards = cards.filter(
+        card =>
+          card.displayName.toLowerCase().includes(query) ||
+          card.displayDescription.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply availability filter
+    if (showOnlyAvailable) {
+      cards = cards.filter(card => checkCardConditions(card).available);
+    }
+
+    // Sort cards
+    cards.sort((a, b) => {
+      switch (sortBy) {
+        case 'unit':
+          return a.targetUnit.localeCompare(b.targetUnit) || a.cardRank - b.cardRank;
+        case 'rank':
+          return a.cardRank - b.cardRank || a.targetUnit.localeCompare(b.targetUnit);
+        case 'type':
+          const typeOrder = ['Common', 'Chain', 'Promotion', 'Combo'];
+          return typeOrder.indexOf(a.cardType) - typeOrder.indexOf(b.cardType);
+        case 'name':
+          return a.displayName.localeCompare(b.displayName);
+        default:
+          return 0;
+      }
+    });
+
     return cards;
-  }, [enabledUnits, typeFilter]);
+  }, [enabledUnits, typeFilter, unitFilter, searchQuery, sortBy, showOnlyAvailable, checkCardConditions]);
 
   // Toggle unit
   const toggleUnit = (unit: EUnitType) => {
@@ -146,6 +260,21 @@ export default function DeckBuilder() {
     setUnitConfigs(prev =>
       prev.map(c => (c.unit === unit ? { ...c, rank } : c))
     );
+  };
+
+  // Enable all units
+  const enableAllUnits = () => {
+    setUnitConfigs(prev => prev.map(c => ({ ...c, enabled: true })));
+  };
+
+  // Disable all units
+  const disableAllUnits = () => {
+    setUnitConfigs(prev => prev.map(c => ({ ...c, enabled: false })));
+  };
+
+  // Set all ranks
+  const setAllRanks = (rank: number) => {
+    setUnitConfigs(prev => prev.map(c => ({ ...c, rank })));
   };
 
   // Add card to deck
@@ -180,30 +309,91 @@ export default function DeckBuilder() {
   // Clear deck
   const clearDeck = () => setDeck([]);
 
+  // Reset all settings
+  const resetAll = () => {
+    setUnitConfigs(getAllUnits().map(unit => ({ unit, rank: 1, enabled: false })));
+    setDeck([]);
+    setTypeFilter('all');
+    setUnitFilter('all');
+    setSearchQuery('');
+    setSortBy('unit');
+    setShowOnlyAvailable(false);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
   // Calculate total cards in deck
   const totalCards = deck.reduce((sum, d) => sum + d.count, 0);
+
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-gray-400">로딩 중...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">
       {/* Left Panel - Unit Configuration */}
       <div className="w-64 bg-gray-800 border-r border-gray-700 overflow-y-auto">
         <div className="p-4">
-          <h2 className="text-lg font-bold text-white mb-4">유닛 설정</h2>
-          <p className="text-xs text-gray-400 mb-4">
-            유닛을 활성화하고 랭크를 설정하세요
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-bold text-white">유닛 설정</h2>
+            <button
+              onClick={resetAll}
+              className="text-xs text-gray-400 hover:text-red-400"
+              title="모든 설정 초기화"
+            >
+              초기화
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            설정은 자동 저장됩니다
           </p>
 
-          <div className="space-y-3">
+          {/* Quick actions */}
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={enableAllUnits}
+              className="flex-1 px-2 py-1 text-xs bg-blue-900/50 text-blue-300 rounded hover:bg-blue-900/70"
+            >
+              전체 선택
+            </button>
+            <button
+              onClick={disableAllUnits}
+              className="flex-1 px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+            >
+              전체 해제
+            </button>
+          </div>
+
+          {/* Set all ranks */}
+          <div className="flex items-center gap-2 mb-4 p-2 bg-gray-700/30 rounded">
+            <span className="text-xs text-gray-400">전체 랭크:</span>
+            <div className="flex gap-1">
+              {[1, 2, 3].map(rank => (
+                <button
+                  key={rank}
+                  onClick={() => setAllRanks(rank)}
+                  className="w-6 h-6 text-xs bg-gray-600 text-gray-300 rounded hover:bg-blue-600 hover:text-white"
+                >
+                  {rank}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
             {unitConfigs.map(config => (
               <div
                 key={config.unit}
-                className={`p-3 rounded-lg border transition-all ${
+                className={`p-2 rounded-lg border transition-all ${
                   config.enabled
                     ? 'border-gray-600 bg-gray-700/50'
                     : 'border-gray-700 bg-gray-800/50 opacity-60'
                 }`}
               >
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={config.enabled}
@@ -211,22 +401,18 @@ export default function DeckBuilder() {
                     className="w-4 h-4 rounded"
                   />
                   <span
-                    className="font-medium text-sm"
+                    className="font-medium text-sm flex-1"
                     style={{ color: UNIT_COLORS[config.unit] }}
                   >
                     {UNIT_KOREAN_NAMES[config.unit]}
                   </span>
-                </div>
-
-                {config.enabled && (
-                  <div className="flex items-center gap-2 ml-6">
-                    <span className="text-xs text-gray-400">랭크:</span>
-                    <div className="flex gap-1">
+                  {config.enabled && (
+                    <div className="flex gap-0.5">
                       {[1, 2, 3].map(rank => (
                         <button
                           key={rank}
                           onClick={() => setUnitRank(config.unit, rank)}
-                          className={`w-6 h-6 text-xs rounded ${
+                          className={`w-5 h-5 text-[10px] rounded ${
                             config.rank >= rank
                               ? 'bg-blue-600 text-white'
                               : 'bg-gray-600 text-gray-400'
@@ -236,8 +422,8 @@ export default function DeckBuilder() {
                         </button>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -245,32 +431,90 @@ export default function DeckBuilder() {
       </div>
 
       {/* Middle Panel - Card List */}
-      <div className="flex-1 overflow-y-auto bg-gray-900">
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">카드 목록</h2>
-            <div className="flex gap-2">
-              <select
-                value={typeFilter}
-                onChange={e => setTypeFilter(e.target.value as ECardType | 'all')}
-                className="px-3 py-1 text-sm bg-gray-700 text-white rounded border border-gray-600"
-              >
-                <option value="all">전체 타입</option>
-                <option value="Common">일반</option>
-                <option value="Chain">연계</option>
-                <option value="Promotion">승급</option>
-                <option value="Combo">조합</option>
-              </select>
-            </div>
+      <div className="flex-1 overflow-hidden flex flex-col bg-gray-900">
+        {/* Filters */}
+        <div className="p-4 border-b border-gray-700 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white">
+              카드 목록
+              <span className="ml-2 text-sm font-normal text-gray-400">
+                ({filteredCards.length}개)
+              </span>
+            </h2>
           </div>
 
+          {/* Search */}
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="카드 이름 또는 설명 검색..."
+            className="w-full px-3 py-2 text-sm bg-gray-800 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+          />
+
+          {/* Filter row */}
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={unitFilter}
+              onChange={e => setUnitFilter(e.target.value as EUnitType | 'all')}
+              className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded border border-gray-600"
+            >
+              <option value="all">전체 유닛</option>
+              {enabledUnits.map(config => (
+                <option key={config.unit} value={config.unit}>
+                  {UNIT_KOREAN_NAMES[config.unit]}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value as ECardType | 'all')}
+              className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded border border-gray-600"
+            >
+              <option value="all">전체 타입</option>
+              <option value="Common">일반</option>
+              <option value="Chain">연계</option>
+              <option value="Promotion">승급</option>
+              <option value="Combo">조합</option>
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as 'unit' | 'rank' | 'type' | 'name')}
+              className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded border border-gray-600"
+            >
+              <option value="unit">유닛순</option>
+              <option value="rank">랭크순</option>
+              <option value="type">타입순</option>
+              <option value="name">이름순</option>
+            </select>
+
+            <label className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-700 text-white rounded border border-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showOnlyAvailable}
+                onChange={e => setShowOnlyAvailable(e.target.checked)}
+                className="w-3 h-3"
+              />
+              <span>선택 가능만</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Card grid */}
+        <div className="flex-1 overflow-y-auto p-4">
           {enabledUnits.length === 0 ? (
             <div className="text-center text-gray-500 py-12">
               왼쪽에서 유닛을 활성화해주세요
             </div>
+          ) : filteredCards.length === 0 ? (
+            <div className="text-center text-gray-500 py-12">
+              조건에 맞는 카드가 없습니다
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {availableCards.map(card => {
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {filteredCards.map(card => {
                 const condition = checkCardConditions(card);
                 const inDeckCount =
                   deck.find(d => d.card.cardID === card.cardID)?.count || 0;
