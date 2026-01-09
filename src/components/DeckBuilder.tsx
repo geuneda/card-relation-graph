@@ -43,14 +43,18 @@ const STORAGE_KEY = 'marinrpg-deckbuilder-state';
 export default function DeckBuilder() {
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Unit configurations with ranks
+  // Unit configurations with ranks (Hero/Marine is always enabled by default)
   const [unitConfigs, setUnitConfigs] = useState<UnitConfig[]>(
     getAllUnits().map(unit => ({
       unit,
       rank: 1,
-      enabled: false,
+      enabled: unit === 'Marine', // 영웅은 기본 활성화
     }))
   );
+
+  // Constants for limits
+  const MAX_ENABLED_UNITS = 5;
+  const MAX_CARDS_PER_UNIT = 12;
 
   // Selected deck cards
   const [deck, setDeck] = useState<DeckCard[]>([]);
@@ -77,9 +81,13 @@ export default function DeckBuilder() {
       if (saved) {
         const state: SavedState = JSON.parse(saved);
 
-        // Restore unit configs
+        // Restore unit configs (ensure Hero/Marine is always enabled)
         if (state.unitConfigs) {
-          setUnitConfigs(state.unitConfigs);
+          const restoredConfigs = state.unitConfigs.map(c => ({
+            ...c,
+            enabled: c.unit === 'Marine' ? true : c.enabled, // 영웅은 항상 활성화
+          }));
+          setUnitConfigs(restoredConfigs);
         }
 
         // Restore deck (need to reconstruct CardData from cardID)
@@ -194,6 +202,17 @@ export default function DeckBuilder() {
         };
       }
 
+      // Check unit card limit (max 12 cards per unit)
+      const unitCardCount = deck
+        .filter(d => d.card.targetUnit === card.targetUnit)
+        .reduce((sum, d) => sum + d.count, 0);
+      if (unitCardCount >= MAX_CARDS_PER_UNIT) {
+        return {
+          available: false,
+          reason: `${UNIT_KOREAN_NAMES[card.targetUnit]} 유닛 최대 선택 도달 (${MAX_CARDS_PER_UNIT}회)`,
+        };
+      }
+
       return { available: true };
     },
     [unitConfigs, deck]
@@ -256,12 +275,33 @@ export default function DeckBuilder() {
     return cards;
   }, [enabledUnits, typeFilter, unitFilter, searchQuery, sortBy, showOnlyAvailable, checkCardConditions]);
 
-  // Toggle unit
+  // Toggle unit (Hero/Marine cannot be disabled, max 5 units)
   const toggleUnit = (unit: EUnitType) => {
-    setUnitConfigs(prev =>
-      prev.map(c => (c.unit === unit ? { ...c, enabled: !c.enabled } : c))
-    );
+    // 영웅은 해제 불가
+    if (unit === 'Marine') return;
+
+    setUnitConfigs(prev => {
+      const currentConfig = prev.find(c => c.unit === unit);
+      const currentEnabledCount = prev.filter(c => c.enabled).length;
+
+      // 이미 활성화된 유닛을 비활성화하는 경우
+      if (currentConfig?.enabled) {
+        return prev.map(c => (c.unit === unit ? { ...c, enabled: false } : c));
+      }
+
+      // 새로 활성화하려는 경우 - 최대 5개 제한 확인
+      if (currentEnabledCount >= MAX_ENABLED_UNITS) {
+        return prev; // 변경 없음
+      }
+
+      return prev.map(c => (c.unit === unit ? { ...c, enabled: true } : c));
+    });
   };
+
+  // Check if more units can be enabled
+  const canEnableMoreUnits = useMemo(() => {
+    return unitConfigs.filter(c => c.enabled).length < MAX_ENABLED_UNITS;
+  }, [unitConfigs]);
 
   // Set unit rank
   const setUnitRank = (unit: EUnitType, rank: number) => {
@@ -270,14 +310,29 @@ export default function DeckBuilder() {
     );
   };
 
-  // Enable all units
+  // Enable units up to max (5 units, prioritizing Marine which is always enabled)
   const enableAllUnits = () => {
-    setUnitConfigs(prev => prev.map(c => ({ ...c, enabled: true })));
+    setUnitConfigs(prev => {
+      let enabledCount = 0;
+      return prev.map(c => {
+        // 영웅은 항상 활성화
+        if (c.unit === 'Marine') {
+          enabledCount++;
+          return { ...c, enabled: true };
+        }
+        // 최대 5개까지만 활성화
+        if (enabledCount < MAX_ENABLED_UNITS) {
+          enabledCount++;
+          return { ...c, enabled: true };
+        }
+        return { ...c, enabled: false };
+      });
+    });
   };
 
-  // Disable all units
+  // Disable all units (except Hero/Marine)
   const disableAllUnits = () => {
-    setUnitConfigs(prev => prev.map(c => ({ ...c, enabled: false })));
+    setUnitConfigs(prev => prev.map(c => ({ ...c, enabled: c.unit === 'Marine' }))); // 영웅은 항상 유지
   };
 
   // Set all ranks
@@ -317,9 +372,9 @@ export default function DeckBuilder() {
   // Clear deck
   const clearDeck = () => setDeck([]);
 
-  // Reset all settings
+  // Reset all settings (Hero/Marine stays enabled)
   const resetAll = () => {
-    setUnitConfigs(getAllUnits().map(unit => ({ unit, rank: 1, enabled: false })));
+    setUnitConfigs(getAllUnits().map(unit => ({ unit, rank: 1, enabled: unit === 'Marine' }))); // 영웅은 항상 활성화
     setDeck([]);
     setTypeFilter('all');
     setUnitFilter('all');
@@ -391,9 +446,13 @@ export default function DeckBuilder() {
       const result = await response.json();
 
       if (response.ok) {
-        // Restore unit configs
+        // Restore unit configs (ensure Hero/Marine is always enabled)
         if (result.data.unitConfigs) {
-          setUnitConfigs(result.data.unitConfigs);
+          const restoredConfigs = result.data.unitConfigs.map((c: UnitConfig) => ({
+            ...c,
+            enabled: c.unit === 'Marine' ? true : c.enabled, // 영웅은 항상 활성화
+          }));
+          setUnitConfigs(restoredConfigs);
         }
 
         // Restore deck
@@ -591,8 +650,11 @@ export default function DeckBuilder() {
               초기화
             </button>
           </div>
-          <p className="text-xs text-gray-400 mb-3">
+          <p className="text-xs text-gray-400 mb-1">
             설정은 자동 저장됩니다
+          </p>
+          <p className="text-xs text-blue-400 mb-3">
+            유닛: {enabledUnits.length}/{MAX_ENABLED_UNITS}개 (영웅 필수)
           </p>
 
           {/* Cloud save/load buttons */}
@@ -644,48 +706,64 @@ export default function DeckBuilder() {
           </div>
 
           <div className="space-y-2">
-            {unitConfigs.map(config => (
-              <div
-                key={config.unit}
-                className={`p-2 rounded-lg border transition-all ${
-                  config.enabled
-                    ? 'border-gray-600 bg-gray-700/50'
-                    : 'border-gray-700 bg-gray-800/50 opacity-60'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={config.enabled}
-                    onChange={() => toggleUnit(config.unit)}
-                    className="w-4 h-4 rounded"
-                  />
-                  <span
-                    className="font-medium text-sm flex-1"
-                    style={{ color: UNIT_COLORS[config.unit] }}
-                  >
-                    {UNIT_KOREAN_NAMES[config.unit]}
-                  </span>
-                  {config.enabled && (
-                    <div className="flex gap-0.5">
-                      {[1, 2, 3].map(rank => (
-                        <button
-                          key={rank}
-                          onClick={() => setUnitRank(config.unit, rank)}
-                          className={`w-5 h-5 text-[10px] rounded ${
-                            config.rank >= rank
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-600 text-gray-400'
-                          }`}
-                        >
-                          {rank}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+            {unitConfigs.map(config => {
+              const isHero = config.unit === 'Marine';
+              const unitCardCount = deck
+                .filter(d => d.card.targetUnit === config.unit)
+                .reduce((sum, d) => sum + d.count, 0);
+              const canToggle = isHero ? false : (config.enabled || canEnableMoreUnits);
+
+              return (
+                <div
+                  key={config.unit}
+                  className={`p-2 rounded-lg border transition-all ${
+                    config.enabled
+                      ? 'border-gray-600 bg-gray-700/50'
+                      : 'border-gray-700 bg-gray-800/50 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={config.enabled}
+                      onChange={() => toggleUnit(config.unit)}
+                      disabled={!canToggle}
+                      className={`w-4 h-4 rounded ${isHero ? 'cursor-not-allowed' : ''}`}
+                      title={isHero ? '영웅은 해제할 수 없습니다' : (!canToggle ? '최대 5개 유닛까지 선택 가능' : '')}
+                    />
+                    <span
+                      className="font-medium text-sm flex-1"
+                      style={{ color: UNIT_COLORS[config.unit] }}
+                    >
+                      {UNIT_KOREAN_NAMES[config.unit]}
+                      {isHero && <span className="text-[10px] text-yellow-500 ml-1">(필수)</span>}
+                    </span>
+                    {config.enabled && (
+                      <>
+                        <span className="text-[10px] text-gray-400">
+                          {unitCardCount}/{MAX_CARDS_PER_UNIT}
+                        </span>
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3].map(rank => (
+                            <button
+                              key={rank}
+                              onClick={() => setUnitRank(config.unit, rank)}
+                              className={`w-5 h-5 text-[10px] rounded ${
+                                config.rank >= rank
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-600 text-gray-400'
+                              }`}
+                            >
+                              {rank}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
