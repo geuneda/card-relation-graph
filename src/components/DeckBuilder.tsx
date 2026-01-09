@@ -55,6 +55,15 @@ export default function DeckBuilder() {
   // Constants for limits
   const MAX_ENABLED_UNITS = 5;
   const MAX_CARDS_PER_UNIT = 12;
+  const MAX_RANK = 4;
+
+  // Calculate rank based on card count (0-3: 1, 4-7: 2, 8-11: 3, 12: 4)
+  const calculateRankFromCardCount = (cardCount: number): number => {
+    if (cardCount >= 12) return 4;
+    if (cardCount >= 8) return 3;
+    if (cardCount >= 4) return 2;
+    return 1;
+  };
 
   // Selected deck cards
   const [deck, setDeck] = useState<DeckCard[]>([]);
@@ -138,6 +147,29 @@ export default function DeckBuilder() {
     () => unitConfigs.filter(c => c.enabled),
     [unitConfigs]
   );
+
+  // Auto-update rank based on card count per unit
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const newConfigs = unitConfigs.map(config => {
+      const unitCardCount = deck
+        .filter(d => d.card.targetUnit === config.unit)
+        .reduce((sum, d) => sum + d.count, 0);
+      const newRank = calculateRankFromCardCount(unitCardCount);
+
+      if (config.rank !== newRank) {
+        return { ...config, rank: newRank };
+      }
+      return config;
+    });
+
+    // Only update if there are actual changes
+    const hasChanges = newConfigs.some((c, i) => c.rank !== unitConfigs[i].rank);
+    if (hasChanges) {
+      setUnitConfigs(newConfigs);
+    }
+  }, [deck, isLoaded]);
 
   // Check if a card's conditions are met
   const checkCardConditions = useCallback(
@@ -693,7 +725,7 @@ export default function DeckBuilder() {
           <div className="flex items-center gap-2 mb-4 p-2 bg-gray-700/30 rounded">
             <span className="text-xs text-gray-400">전체 랭크:</span>
             <div className="flex gap-1">
-              {[1, 2, 3].map(rank => (
+              {[1, 2, 3, 4].map(rank => (
                 <button
                   key={rank}
                   onClick={() => setAllRanks(rank)}
@@ -744,7 +776,7 @@ export default function DeckBuilder() {
                           {unitCardCount}/{MAX_CARDS_PER_UNIT}
                         </span>
                         <div className="flex gap-0.5">
-                          {[1, 2, 3].map(rank => (
+                          {[1, 2, 3, 4].map(rank => (
                             <button
                               key={rank}
                               onClick={() => setUnitRank(config.unit, rank)}
