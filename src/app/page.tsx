@@ -1,65 +1,55 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import dynamic from 'next/dynamic';
+import UnitSelector from '@/components/UnitSelector';
+import { EUnitType, UNIT_KOREAN_NAMES } from '@/types/card';
+
+const CardGraph = dynamic(() => import('@/components/CardGraph'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-gray-400">그래프 로딩 중...</div>
+    </div>
+  ),
+});
 
 export default function Home() {
+  const [selectedUnit, setSelectedUnit] = useState<EUnitType>('Marine');
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="flex flex-col h-screen bg-gray-900">
+      {/* Header */}
+      <header className="px-6 py-4 bg-gray-800 border-b border-gray-700">
+        <h1 className="text-2xl font-bold text-white">
+          MarinRPG 카드 관계도
+        </h1>
+        <p className="text-sm text-gray-400 mt-1">
+          유닛을 선택하고 카드를 클릭하면 연계 관계를 확인할 수 있습니다
+        </p>
+      </header>
+
+      {/* Unit Selector */}
+      <UnitSelector selectedUnit={selectedUnit} onSelectUnit={setSelectedUnit} />
+
+      {/* Current Unit Info */}
+      <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700">
+        <span className="text-gray-400 text-sm">
+          현재 선택: <span className="text-white font-medium">{UNIT_KOREAN_NAMES[selectedUnit]}</span>
+        </span>
+      </div>
+
+      {/* Graph */}
+      <div className="flex-1 relative">
+        <CardGraph selectedUnit={selectedUnit} />
+      </div>
+
+      {/* Footer */}
+      <footer className="px-4 py-2 bg-gray-800 border-t border-gray-700 text-center">
+        <p className="text-xs text-gray-500">
+          연계카드: A → B → C (A가 있어야 B 획득 가능) | 조합카드: 해당 유닛이 특정 랭크 이상이어야 함
+        </p>
+      </footer>
     </div>
   );
 }
