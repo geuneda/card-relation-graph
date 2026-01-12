@@ -32,6 +32,13 @@ const nodeTypes = {
 
 const CARD_TYPES: ECardType[] = ['Spawn', 'Common', 'Chain', 'Promotion', 'Combo'];
 
+type SortMode = 'default' | 'dependency';
+
+const SORT_MODE_LABELS: Record<SortMode, string> = {
+  default: '기본 정렬',
+  dependency: '의존 유닛별',
+};
+
 interface CardGraphProps {
   selectedUnits: EUnitType[];
 }
@@ -40,6 +47,7 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
   const [highlightedCards, setHighlightedCards] = useState<Set<number>>(new Set());
   const [selectedCardTypes, setSelectedCardTypes] = useState<Set<ECardType>>(new Set(CARD_TYPES));
+  const [sortMode, setSortMode] = useState<SortMode>('default');
 
   // Get cards for all selected units
   const cards = useMemo(() => {
@@ -86,15 +94,15 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
 
       // Sort cards within each rank
       const typeOrder = ['Spawn', 'Common', 'Chain', 'Promotion', 'Combo'];
-      const isComboOnly = selectedCardTypes.size === 1 && selectedCardTypes.has('Combo');
 
       rankMap.forEach((rankCards) => {
         rankCards.sort((a, b) => {
-          // Combo만 필터링된 경우: 의존 유닛 기준 정렬
-          if (isComboOnly && a.cardType === 'Combo' && b.cardType === 'Combo') {
+          // 의존 유닛별 정렬 모드
+          if (sortMode === 'dependency') {
             const aCondition = parseCombineCondition(a.combineCondition);
             const bCondition = parseCombineCondition(b.combineCondition);
 
+            // 둘 다 의존 조건이 있는 경우
             if (aCondition && bCondition) {
               // 1차: 의존 유닛 이름순
               const unitCompare = aCondition.unit.localeCompare(bCondition.unit);
@@ -105,6 +113,9 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
                 return aCondition.rank - bCondition.rank;
               }
             }
+            // 의존 조건이 있는 카드를 뒤로
+            if (aCondition && !bCondition) return 1;
+            if (!aCondition && bCondition) return -1;
           }
 
           // 기본 정렬: 타입순 → ID순
@@ -249,7 +260,7 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
     });
 
     return { initialNodes: nodes, initialEdges: edges };
-  }, [filteredCards, filteredCardIds, selectedUnits, selectedCardTypes]);
+  }, [filteredCards, filteredCardIds, selectedUnits, selectedCardTypes, sortMode]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -422,8 +433,9 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
         />
       </ReactFlow>
 
-      {/* Card Type Filter */}
-      <div className="absolute top-4 left-4 z-10">
+      {/* Card Type Filter & Sort Options */}
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+        {/* Card Type Filter */}
         <div className="bg-gray-800/90 rounded-lg overflow-hidden border border-gray-700">
           <div className="p-2 md:p-3">
             <div className="flex items-center gap-2 mb-2">
@@ -452,6 +464,28 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
                   }}
                 >
                   {CARD_TYPE_KOREAN[cardType]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Sort Options */}
+        <div className="bg-gray-800/90 rounded-lg overflow-hidden border border-gray-700">
+          <div className="p-2 md:p-3">
+            <h4 className="font-bold text-white text-xs mb-2">정렬</h4>
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.keys(SORT_MODE_LABELS) as SortMode[]).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setSortMode(mode)}
+                  className={`px-2 py-1 text-[10px] md:text-xs rounded transition-all ${
+                    sortMode === mode
+                      ? 'bg-blue-600 text-white font-medium'
+                      : 'bg-gray-700/50 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {SORT_MODE_LABELS[mode]}
                 </button>
               ))}
             </div>
