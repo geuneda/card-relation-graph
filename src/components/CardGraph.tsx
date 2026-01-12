@@ -17,8 +17,10 @@ import CardNode from './CardNode';
 import {
   CardData,
   EUnitType,
+  ECardType,
   UNIT_COLORS,
   CARD_TYPE_COLORS,
+  CARD_TYPE_KOREAN,
   parseCombineCondition,
   UNIT_KOREAN_NAMES,
 } from '@/types/card';
@@ -28,6 +30,8 @@ const nodeTypes = {
   cardNode: CardNode,
 };
 
+const CARD_TYPES: ECardType[] = ['Spawn', 'Common', 'Chain', 'Promotion', 'Combo'];
+
 interface CardGraphProps {
   selectedUnits: EUnitType[];
 }
@@ -35,6 +39,7 @@ interface CardGraphProps {
 export default function CardGraph({ selectedUnits }: CardGraphProps) {
   const [selectedCard, setSelectedCard] = useState<number | null>(null);
   const [highlightedCards, setHighlightedCards] = useState<Set<number>>(new Set());
+  const [selectedCardTypes, setSelectedCardTypes] = useState<Set<ECardType>>(new Set(CARD_TYPES));
 
   // Get cards for all selected units
   const cards = useMemo(() => {
@@ -44,6 +49,16 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
     });
     return allCards;
   }, [selectedUnits]);
+
+  // Filter cards by selected card types
+  const filteredCards = useMemo(() => {
+    return cards.filter(card => selectedCardTypes.has(card.cardType));
+  }, [cards, selectedCardTypes]);
+
+  // Set of filtered card IDs for quick lookup
+  const filteredCardIds = useMemo(() => {
+    return new Set(filteredCards.map(c => c.cardID));
+  }, [filteredCards]);
 
   // Build nodes and edges
   const { initialNodes, initialEdges } = useMemo(() => {
@@ -58,7 +73,7 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
     const cardsByUnitAndRank: Map<EUnitType, Map<number, CardData[]>> = new Map();
 
     selectedUnits.forEach(unit => {
-      const unitCards = getCardsByUnit(unit);
+      const unitCards = getCardsByUnit(unit).filter(card => selectedCardTypes.has(card.cardType));
       const rankMap = new Map<number, CardData[]>();
 
       unitCards.forEach(card => {
@@ -149,10 +164,11 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
     });
 
     // Create edges for chain relationships (parentCardIDs)
-    cards.forEach(card => {
+    filteredCards.forEach(card => {
       card.parentCardIDs.forEach(parentId => {
         const parentCard = getCardById(parentId);
-        if (parentCard && selectedUnits.includes(parentCard.targetUnit)) {
+        // Only create edge if both cards are in the filtered set
+        if (parentCard && selectedUnits.includes(parentCard.targetUnit) && filteredCardIds.has(parentId)) {
           edges.push({
             id: `chain-${parentId}-${card.cardID}`,
             source: parentId.toString(),
@@ -178,7 +194,8 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
         const spawnCard = cardData.find(
           c => c.targetUnit === combineCondition.unit && c.cardType === 'Spawn'
         );
-        if (spawnCard) {
+        // Only create edge if spawn card is in the filtered set
+        if (spawnCard && filteredCardIds.has(spawnCard.cardID)) {
           edges.push({
             id: `combo-${spawnCard.cardID}-${card.cardID}`,
             source: spawnCard.cardID.toString(),
@@ -212,12 +229,12 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
     });
 
     return { initialNodes: nodes, initialEdges: edges };
-  }, [cards, selectedUnits]);
+  }, [filteredCards, filteredCardIds, selectedUnits, selectedCardTypes]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Reset when units change
+  // Reset when units or card type filter changes
   useEffect(() => {
     setNodes(initialNodes);
     setEdges(initialEdges);
@@ -319,6 +336,30 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
     setHighlightedCards(new Set());
   }, []);
 
+  const toggleCardType = useCallback((cardType: ECardType) => {
+    setSelectedCardTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(cardType)) {
+        // Don't allow deselecting if it's the last one
+        if (next.size > 1) {
+          next.delete(cardType);
+        }
+      } else {
+        next.add(cardType);
+      }
+      return next;
+    });
+    // Reset selection when filter changes
+    setSelectedCard(null);
+    setHighlightedCards(new Set());
+  }, []);
+
+  const selectAllCardTypes = useCallback(() => {
+    setSelectedCardTypes(new Set(CARD_TYPES));
+    setSelectedCard(null);
+    setHighlightedCards(new Set());
+  }, []);
+
   if (selectedUnits.length === 0) {
     return (
       <div className="w-full h-full flex items-center justify-center">
@@ -360,6 +401,43 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
           className="!bg-gray-800 !border-gray-700"
         />
       </ReactFlow>
+
+      {/* Card Type Filter */}
+      <div className="absolute top-4 left-4 z-10">
+        <div className="bg-gray-800/90 rounded-lg overflow-hidden border border-gray-700">
+          <div className="p-2 md:p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <h4 className="font-bold text-white text-xs">카드 타입 필터</h4>
+              <button
+                onClick={selectAllCardTypes}
+                className="text-[10px] text-gray-400 hover:text-white transition-colors"
+              >
+                전체 선택
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {CARD_TYPES.map(cardType => (
+                <button
+                  key={cardType}
+                  onClick={() => toggleCardType(cardType)}
+                  className={`px-2 py-1 text-[10px] md:text-xs rounded transition-all ${
+                    selectedCardTypes.has(cardType)
+                      ? 'text-white font-medium'
+                      : 'bg-gray-700/50 text-gray-500'
+                  }`}
+                  style={{
+                    backgroundColor: selectedCardTypes.has(cardType)
+                      ? CARD_TYPE_COLORS[cardType]
+                      : undefined,
+                  }}
+                >
+                  {CARD_TYPE_KOREAN[cardType]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Legend */}
       <div className="absolute bottom-4 left-4 max-w-[200px] z-10">
