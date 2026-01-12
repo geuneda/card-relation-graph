@@ -86,8 +86,28 @@ export default function CardGraph({ selectedUnits }: CardGraphProps) {
 
       // Sort cards within each rank
       const typeOrder = ['Spawn', 'Common', 'Chain', 'Promotion', 'Combo'];
+      const isComboOnly = selectedCardTypes.size === 1 && selectedCardTypes.has('Combo');
+
       rankMap.forEach((rankCards) => {
         rankCards.sort((a, b) => {
+          // Combo만 필터링된 경우: 의존 유닛 기준 정렬
+          if (isComboOnly && a.cardType === 'Combo' && b.cardType === 'Combo') {
+            const aCondition = parseCombineCondition(a.combineCondition);
+            const bCondition = parseCombineCondition(b.combineCondition);
+
+            if (aCondition && bCondition) {
+              // 1차: 의존 유닛 이름순
+              const unitCompare = aCondition.unit.localeCompare(bCondition.unit);
+              if (unitCompare !== 0) return unitCompare;
+
+              // 2차: 필요 랭크순
+              if (aCondition.rank !== bCondition.rank) {
+                return aCondition.rank - bCondition.rank;
+              }
+            }
+          }
+
+          // 기본 정렬: 타입순 → ID순
           const aOrder = typeOrder.indexOf(a.cardType);
           const bOrder = typeOrder.indexOf(b.cardType);
           if (aOrder !== bOrder) return aOrder - bOrder;
